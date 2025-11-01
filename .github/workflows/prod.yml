@@ -1,0 +1,117 @@
+name: PROD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  JAVA_VERSION: '11'
+  K8S_NAMESPACE: 'ecommerce-prod'
+
+jobs:
+  deploy-to-prod:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://product-service.prod.example.com
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v3
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Cache Maven dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Build application
+      run: |
+        ./mvnw clean package -DskipTests
+        
+    - name: Run unit tests
+      run: |
+        ./mvnw test
+        
+    - name: Run integration tests
+      run: |
+        ./mvnw verify -DskipUnitTests=false
+        
+    - name: Generate test report
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: target/surefire-reports/TEST-*.xml
+        
+    - name: Build Docker image
+      run: |
+        docker build -t product-service:prod .
+        
+    - name: Docker Hub Login
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Push Docker image
+      run: |
+        docker tag product-service:prod ${{ secrets.DOCKER_USERNAME }}/product-service:latest
+        docker tag product-service:prod ${{ secrets.DOCKER_USERNAME }}/product-service:${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/product-service:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/product-service:${{ github.sha }}
+        
+    - name: Generate Release Notes
+      id: release_notes
+      run: |
+        echo "# Release Notes - Version ${{ github.sha }}" > RELEASE_NOTES.md
+        echo "" >> RELEASE_NOTES.md
+        echo "## Changes" >> RELEASE_NOTES.md
+        echo "\`\`\`" >> RELEASE_NOTES.md
+        git log --oneline $(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo HEAD~10)..HEAD >> RELEASE_NOTES.md
+        echo "\`\`\`" >> RELEASE_NOTES.md
+        echo "" >> RELEASE_NOTES.md
+        echo "## Docker Image" >> RELEASE_NOTES.md
+        echo "\`\`\`" >> RELEASE_NOTES.md
+        echo "${{ secrets.DOCKER_USERNAME }}/product-service:${{ github.sha }}" >> RELEASE_NOTES.md
+        echo "\`\`\`" >> RELEASE_NOTES.md
+        
+    - name: Upload Release Notes
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-notes
+        path: RELEASE_NOTES.md
+        
+    # NOTE: Kubernetes deployment is done locally with Minikube
+    # See SETUP_MINIKUBE.md for instructions
+    # - name: Set up kubectl
+    #   uses: azure/setup-kubectl@v3
+    #   
+    # - name: Configure kubectl
+    #   run: |
+    #     echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
+    #     export KUBECONFIG=kubeconfig.yaml
+    #     
+    # - name: Apply Kubernetes manifests for PROD
+    #   run: |
+    #     export KUBECONFIG=kubeconfig.yaml
+    #     kubectl apply -f k8s/namespace.yaml
+    #     kubectl apply -f k8s/prod/
+    #     kubectl apply -f k8s/configmap.yaml
+    #     kubectl apply -f k8s/secret.yaml
+    #     kubectl set image deployment/product-service product-service=${{ secrets.DOCKER_USERNAME }}/product-service:${{ github.sha }} -n ecommerce-prod || true
+    #     
+    # - name: Wait for PROD deployment
+    #   run: |
+    #     export KUBECONFIG=kubeconfig.yaml
+    #     kubectl rollout status deployment/product-service -n ecommerce-prod --timeout=5m
+

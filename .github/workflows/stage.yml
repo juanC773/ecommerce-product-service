@@ -1,0 +1,104 @@
+name: STAGE Pipeline
+
+on:
+  push:
+    branches:
+      - release/*
+  pull_request:
+    branches:
+      - main
+
+env:
+  JAVA_VERSION: '11'
+  K8S_NAMESPACE: 'ecommerce-stage'
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v3
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Cache Maven dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Build application
+      run: |
+        ./mvnw clean package -DskipTests
+        
+    - name: Run unit tests
+      run: |
+        ./mvnw test
+        
+    - name: Run integration tests
+      run: |
+        ./mvnw verify -DskipUnitTests=false
+        
+    - name: Generate test report
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: target/surefire-reports/TEST-*.xml
+        
+    - name: Build Docker image
+      run: |
+        docker build -t product-service:stage .
+        
+    - name: Docker Hub Login
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Push Docker image
+      run: |
+        docker tag product-service:stage ${{ secrets.DOCKER_USERNAME }}/product-service:stage-latest
+        docker tag product-service:stage ${{ secrets.DOCKER_USERNAME }}/product-service:stage-${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/product-service:stage-latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/product-service:stage-${{ github.sha }}
+        
+    - name: Run E2E tests
+      run: |
+        echo "E2E tests would run here against STAGE environment"
+        # ./mvnw verify -P e2e-test
+        
+    - name: Run Performance tests with Locust
+      run: |
+        echo "Performance tests with Locust would run here"
+        # docker run --rm locustio/locust -f locust/locustfile.py --host=http://api-gateway:8080
+    
+    # NOTE: Kubernetes deployment is done locally with Minikube
+    # See SETUP_MINIKUBE.md for instructions
+    # - name: Set up kubectl
+    #   uses: azure/setup-kubectl@v3
+    #   
+    # - name: Configure kubectl
+    #   run: |
+    #     echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
+    #     export KUBECONFIG=kubeconfig.yaml
+    #     
+    # - name: Apply Kubernetes manifests for STAGE
+    #   run: |
+    #     export KUBECONFIG=kubeconfig.yaml
+    #     kubectl apply -f k8s/namespace.yaml
+    #     kubectl apply -f k8s/stage/
+    #     kubectl apply -f k8s/configmap.yaml
+    #     kubectl apply -f k8s/secret.yaml
+    #     kubectl set image deployment/product-service product-service=${{ secrets.DOCKER_USERNAME }}/product-service:stage-${{ github.sha }} -n ecommerce-stage || true
+    #     
+    # - name: Wait for STAGE deployment
+    #   run: |
+    #     export KUBECONFIG=kubeconfig.yaml
+    #     kubectl rollout status deployment/product-service -n ecommerce-stage --timeout=5m
+
