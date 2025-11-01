@@ -125,12 +125,8 @@ jobs:
     - name: Checkout infrastructure repository
       uses: actions/checkout@v4
       with:
-        repository: ${{ secrets.INFRA_REPO }}
+        repository: ${{ secrets.INFRA_REPO || format('{0}/ecommerce-infra', github.repository_owner) }}
         path: infra
-        token: ${{ secrets.INFRA_REPO_TOKEN }}
-      # Nota: Si infra está en el mismo org, puedes usar:
-      # repository: ${{ github.repository_owner }}/ecommerce-infra
-      # Si está en otro repo, necesitas el token
         
     - name: Set up kubectl
       uses: azure/setup-kubectl@v3
