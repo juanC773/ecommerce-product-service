@@ -12,8 +12,8 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/product-service
+  REGISTRY: docker.io
+  IMAGE_NAME: juanc7773/product-service
   SERVICE_NAME: product-service
   KUBERNETES_NAMESPACE: ecommerce-dev
 
@@ -21,6 +21,10 @@ jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      checks: write  # Necesario para el test reporter
     
     steps:
     - name: Checkout code
