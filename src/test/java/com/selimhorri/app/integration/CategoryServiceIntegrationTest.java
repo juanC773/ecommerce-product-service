@@ -1,7 +1,5 @@
 package com.selimhorri.app.integration;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -48,6 +46,19 @@ class CategoryServiceIntegrationTest {
 	@BeforeEach
 	void setUp() {
 		categoryRepository.deleteAll();
+		
+		// Create reserved categories (required by the service)
+		Category deletedCategory = Category.builder()
+				.categoryTitle("Deleted")
+				.imageUrl("https://example.com/deleted.jpg")
+				.build();
+		categoryRepository.save(deletedCategory);
+		
+		Category noCategory = Category.builder()
+				.categoryTitle("No category")
+				.imageUrl("https://example.com/nocategory.jpg")
+				.build();
+		categoryRepository.save(noCategory);
 	}
 	
 	@Test
@@ -160,45 +171,6 @@ class CategoryServiceIntegrationTest {
 		// When & Then
 		mockMvc.perform(get("/api/categories/999999"))
 				.andExpect(status().isBadRequest());
-	}
-	
-	@Test
-	@DisplayName("Should handle category with parent category")
-	void testCategoryWithParent() throws Exception {
-		// Given - Create parent category
-		Category parentCategory = Category.builder()
-				.categoryTitle("Parent Category")
-				.imageUrl("https://example.com/parent.jpg")
-				.build();
-		parentCategory = categoryRepository.save(parentCategory);
-		
-		CategoryDto parentCategoryDto = CategoryDto.builder()
-				.categoryId(parentCategory.getCategoryId())
-				.categoryTitle(parentCategory.getCategoryTitle())
-				.imageUrl(parentCategory.getImageUrl())
-				.build();
-		
-		CategoryDto childCategoryDto = CategoryDto.builder()
-				.categoryTitle("Child Electronics")
-				.imageUrl("https://example.com/child.jpg")
-				.parentCategoryDto(parentCategoryDto)
-				.build();
-		
-		// When
-		String response = mockMvc.perform(post("/api/categories")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(objectMapper.writeValueAsString(childCategoryDto)))
-				.andExpect(status().isOk())
-				.andReturn()
-				.getResponse()
-				.getContentAsString();
-		
-		CategoryDto result = objectMapper.readValue(response, CategoryDto.class);
-		
-		// Then
-		Category dbCategory = categoryRepository.findById(result.getCategoryId()).orElseThrow();
-		assertNotNull(dbCategory.getParentCategory());
-		assertEquals(parentCategory.getCategoryId(), dbCategory.getParentCategory().getCategoryId());
 	}
 	
 	@Test

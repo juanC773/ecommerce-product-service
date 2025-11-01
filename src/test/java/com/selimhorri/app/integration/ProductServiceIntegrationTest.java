@@ -64,6 +64,19 @@ class ProductServiceIntegrationTest {
 		productRepository.deleteAll();
 		categoryRepository.deleteAll();
 		
+		// Create reserved categories first (required by the service)
+		Category deletedCategory = Category.builder()
+				.categoryTitle("Deleted")
+				.imageUrl("https://example.com/deleted.jpg")
+				.build();
+		categoryRepository.save(deletedCategory);
+		
+		Category noCategory = Category.builder()
+				.categoryTitle("No category")
+				.imageUrl("https://example.com/nocategory.jpg")
+				.build();
+		categoryRepository.save(noCategory);
+		
 		// Create test category
 		testCategory = Category.builder()
 				.categoryId(1)
@@ -196,8 +209,8 @@ class ProductServiceIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$").value(true));
 		
-		// Verify it was deleted from database
-		assertTrue(productRepository.findById(savedProduct.getProductId()).isEmpty());
+		// Verify it was soft deleted (not found in findAllWithoutDeleted)
+		assertTrue(productRepository.findByIdWithoutDeleted(savedProduct.getProductId()).isEmpty());
 	}
 	
 	@Test
@@ -245,6 +258,7 @@ class ProductServiceIntegrationTest {
 		// Given - Create first product
 		ProductDto productDto1 = ProductDto.builder()
 				.productTitle("Product 1")
+				.imageUrl("https://example.com/product1.jpg")
 				.sku("UNIQUE-SKU-001")
 				.priceUnit(100.0)
 				.quantity(10)
@@ -259,6 +273,7 @@ class ProductServiceIntegrationTest {
 		// When & Then - Try to create duplicate SKU
 		ProductDto productDto2 = ProductDto.builder()
 				.productTitle("Product 2")
+				.imageUrl("https://example.com/product2.jpg")
 				.sku("UNIQUE-SKU-001") // Same SKU
 				.priceUnit(200.0)
 				.quantity(20)

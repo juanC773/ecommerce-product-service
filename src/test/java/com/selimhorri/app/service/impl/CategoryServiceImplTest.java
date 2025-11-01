@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -28,6 +27,7 @@ import com.selimhorri.app.domain.Category;
 import com.selimhorri.app.dto.CategoryDto;
 import com.selimhorri.app.exception.wrapper.CategoryNotFoundException;
 import com.selimhorri.app.repository.CategoryRepository;
+import com.selimhorri.app.repository.ProductRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CategoryServiceImpl Unit Tests")
@@ -35,6 +35,9 @@ class CategoryServiceImplTest {
 	
 	@Mock
 	private CategoryRepository categoryRepository;
+	
+	@Mock
+	private ProductRepository productRepository;
 	
 	@InjectMocks
 	private CategoryServiceImpl categoryService;
@@ -76,7 +79,7 @@ class CategoryServiceImplTest {
 	void testFindAll_Success() {
 		// Given
 		List<Category> categories = Arrays.asList(testCategory);
-		when(categoryRepository.findAll()).thenReturn(categories);
+		when(categoryRepository.findAllNonReserved()).thenReturn(categories);
 		
 		// When
 		List<CategoryDto> result = categoryService.findAll();
@@ -85,14 +88,14 @@ class CategoryServiceImplTest {
 		assertNotNull(result);
 		assertEquals(1, result.size());
 		assertEquals("Electronics", result.get(0).getCategoryTitle());
-		verify(categoryRepository, times(1)).findAll();
+		verify(categoryRepository, times(1)).findAllNonReserved();
 	}
 	
 	@Test
 	@DisplayName("Should return empty list when no categories exist")
 	void testFindAll_EmptyList() {
 		// Given
-		when(categoryRepository.findAll()).thenReturn(Collections.emptyList());
+		when(categoryRepository.findAllNonReserved()).thenReturn(Collections.emptyList());
 		
 		// When
 		List<CategoryDto> result = categoryService.findAll();
@@ -100,14 +103,14 @@ class CategoryServiceImplTest {
 		// Then
 		assertNotNull(result);
 		assertTrue(result.isEmpty());
-		verify(categoryRepository, times(1)).findAll();
+		verify(categoryRepository, times(1)).findAllNonReserved();
 	}
 	
 	@Test
 	@DisplayName("Should find category by id successfully")
 	void testFindById_Success() {
 		// Given
-		when(categoryRepository.findById(1)).thenReturn(Optional.of(testCategory));
+		when(categoryRepository.findNonReservedById(1)).thenReturn(Optional.of(testCategory));
 		
 		// When
 		CategoryDto result = categoryService.findById(1);
@@ -116,14 +119,14 @@ class CategoryServiceImplTest {
 		assertNotNull(result);
 		assertEquals(1, result.getCategoryId());
 		assertEquals("Electronics", result.getCategoryTitle());
-		verify(categoryRepository, times(1)).findById(1);
+		verify(categoryRepository, times(1)).findNonReservedById(1);
 	}
 	
 	@Test
 	@DisplayName("Should throw CategoryNotFoundException when category not found")
 	void testFindById_NotFound() {
 		// Given
-		when(categoryRepository.findById(999)).thenReturn(Optional.empty());
+		when(categoryRepository.findNonReservedById(999)).thenReturn(Optional.empty());
 		
 		// When & Then
 		CategoryNotFoundException exception = assertThrows(
@@ -132,7 +135,7 @@ class CategoryServiceImplTest {
 		);
 		
 		assertTrue(exception.getMessage().contains("Category with id: 999 not found"));
-		verify(categoryRepository, times(1)).findById(999);
+		verify(categoryRepository, times(1)).findNonReservedById(999);
 	}
 	
 	@Test
@@ -151,6 +154,7 @@ class CategoryServiceImplTest {
 				.parentCategory(parentCategory)
 				.build();
 		
+		when(categoryRepository.existsByCategoryTitleIgnoreCase("Clothing")).thenReturn(false);
 		when(categoryRepository.save(any(Category.class))).thenReturn(savedCategory);
 		
 		// When
@@ -160,6 +164,7 @@ class CategoryServiceImplTest {
 		assertNotNull(result);
 		assertEquals(2, result.getCategoryId());
 		assertEquals("Clothing", result.getCategoryTitle());
+		verify(categoryRepository, times(1)).existsByCategoryTitleIgnoreCase("Clothing");
 		verify(categoryRepository, times(1)).save(any(Category.class));
 	}
 	
@@ -173,13 +178,20 @@ class CategoryServiceImplTest {
 				.imageUrl("https://example.com/electronics-updated.jpg")
 				.build();
 		
+		Category existingCategory = Category.builder()
+				.categoryId(1)
+				.categoryTitle("Electronics")
+				.imageUrl("https://example.com/electronics.jpg")
+				.build();
+		
 		Category updatedCategory = Category.builder()
 				.categoryId(1)
 				.categoryTitle("Updated Electronics")
 				.imageUrl("https://example.com/electronics-updated.jpg")
-				.parentCategory(parentCategory)
 				.build();
 		
+		when(categoryRepository.findById(1)).thenReturn(Optional.of(existingCategory));
+		when(categoryRepository.existsByCategoryTitleIgnoreCaseAndCategoryIdNot("Updated Electronics", 1)).thenReturn(false);
 		when(categoryRepository.save(any(Category.class))).thenReturn(updatedCategory);
 		
 		// When
@@ -189,6 +201,8 @@ class CategoryServiceImplTest {
 		assertNotNull(result);
 		assertEquals(1, result.getCategoryId());
 		assertEquals("Updated Electronics", result.getCategoryTitle());
+		verify(categoryRepository, times(1)).findById(1);
+		verify(categoryRepository, times(1)).existsByCategoryTitleIgnoreCaseAndCategoryIdNot("Updated Electronics", 1);
 		verify(categoryRepository, times(1)).save(any(Category.class));
 	}
 	
@@ -196,24 +210,34 @@ class CategoryServiceImplTest {
 	@DisplayName("Should update category by id successfully")
 	void testUpdateById_Success() {
 		// Given
-		when(categoryRepository.findById(1)).thenReturn(Optional.of(testCategory));
+		CategoryDto updatedCategoryDto = CategoryDto.builder()
+				.categoryTitle("Updated Electronics")
+				.build();
+		
+		Category existingCategory = Category.builder()
+				.categoryId(1)
+				.categoryTitle("Electronics")
+				.imageUrl("https://example.com/electronics.jpg")
+				.build();
 		
 		Category updatedCategory = Category.builder()
 				.categoryId(1)
 				.categoryTitle("Updated Electronics")
-				.imageUrl("https://example.com/electronics-updated.jpg")
-				.parentCategory(parentCategory)
+				.imageUrl("https://example.com/electronics.jpg")
 				.build();
 		
+		when(categoryRepository.findById(1)).thenReturn(Optional.of(existingCategory));
+		when(categoryRepository.existsByCategoryTitleIgnoreCaseAndCategoryIdNot("Updated Electronics", 1)).thenReturn(false);
 		when(categoryRepository.save(any(Category.class))).thenReturn(updatedCategory);
 		
 		// When
-		CategoryDto result = categoryService.update(1, testCategoryDto);
+		CategoryDto result = categoryService.update(1, updatedCategoryDto);
 		
 		// Then
 		assertNotNull(result);
 		assertEquals(1, result.getCategoryId());
 		verify(categoryRepository, times(1)).findById(1);
+		verify(categoryRepository, times(1)).existsByCategoryTitleIgnoreCaseAndCategoryIdNot("Updated Electronics", 1);
 		verify(categoryRepository, times(1)).save(any(Category.class));
 	}
 	
@@ -221,13 +245,43 @@ class CategoryServiceImplTest {
 	@DisplayName("Should delete category by id successfully")
 	void testDeleteById_Success() {
 		// Given
-		// No mocking needed - deleteById doesn't return value
+		Category noCategory = Category.builder()
+				.categoryId(999)
+				.categoryTitle("No Category")
+				.build();
+		
+		when(categoryRepository.findById(1)).thenReturn(Optional.of(testCategory));
+		when(categoryRepository.findByCategoryTitleIgnoreCase("No Category")).thenReturn(Optional.of(noCategory));
 		
 		// When
 		categoryService.deleteById(1);
 		
 		// Then
-		verify(categoryRepository, times(1)).deleteById(1);
+		verify(categoryRepository, times(1)).findById(1);
+		verify(categoryRepository, times(1)).findByCategoryTitleIgnoreCase("No Category");
+		verify(productRepository, times(1)).updateCategoryForProducts(1, noCategory);
+		verify(categoryRepository, times(1)).delete(any(Category.class));
+	}
+	
+	@Test
+	@DisplayName("Should throw exception when trying to delete reserved category")
+	void testDeleteById_ReservedCategory() {
+		// Given
+		Category deletedCategory = Category.builder()
+				.categoryId(2)
+				.categoryTitle("Deleted")
+				.build();
+		
+		when(categoryRepository.findById(2)).thenReturn(Optional.of(deletedCategory));
+		
+		// When & Then
+		assertThrows(
+				IllegalArgumentException.class,
+				() -> categoryService.deleteById(2)
+		);
+		
+		verify(categoryRepository, times(1)).findById(2);
+		verify(categoryRepository, never()).delete(any(Category.class));
 	}
 	
 	@Test
@@ -242,7 +296,7 @@ class CategoryServiceImplTest {
 				.build();
 		
 		List<Category> categories = Arrays.asList(testCategory, category2);
-		when(categoryRepository.findAll()).thenReturn(categories);
+		when(categoryRepository.findAllNonReserved()).thenReturn(categories);
 		
 		// When
 		List<CategoryDto> result = categoryService.findAll();
@@ -252,7 +306,7 @@ class CategoryServiceImplTest {
 		assertEquals(2, result.size());
 		assertEquals("Electronics", result.get(0).getCategoryTitle());
 		assertEquals("Clothing", result.get(1).getCategoryTitle());
-		verify(categoryRepository, times(1)).findAll();
+		verify(categoryRepository, times(1)).findAllNonReserved();
 	}
 	
 	@Test
@@ -272,6 +326,7 @@ class CategoryServiceImplTest {
 				.parentCategory(null)
 				.build();
 		
+		when(categoryRepository.existsByCategoryTitleIgnoreCase("Root Category")).thenReturn(false);
 		when(categoryRepository.save(any(Category.class))).thenReturn(savedCategory);
 		
 		// When
@@ -285,4 +340,3 @@ class CategoryServiceImplTest {
 	}
 	
 }
-
