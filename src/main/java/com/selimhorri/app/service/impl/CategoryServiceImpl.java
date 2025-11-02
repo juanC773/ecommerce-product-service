@@ -1,5 +1,6 @@
 package com.selimhorri.app.service.impl;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -64,9 +65,16 @@ public class CategoryServiceImpl implements CategoryService {
 		categoryDto.setSubCategoriesDtos(null);
 		categoryDto.setCategoryId(null);
 
+		// Mapear DTO a entidad
+		Category newCategory = CategoryMappingHelper.map(categoryDto);
+		
+		// Setear createdAt manualmente si JPA Auditing no está funcionando
+		if (newCategory.getCreatedAt() == null) {
+			newCategory.setCreatedAt(Instant.now());
+		}
+
 		// Guardar y mapear a DTO
-		return CategoryMappingHelper.map(
-				this.categoryRepository.save(CategoryMappingHelper.map(categoryDto)));
+		return CategoryMappingHelper.map(this.categoryRepository.save(newCategory));
 	}
 
 	@Override
