@@ -67,7 +67,7 @@ public class CategoryServiceImpl implements CategoryService {
 
 		// Mapear DTO a entidad
 		Category newCategory = CategoryMappingHelper.map(categoryDto);
-		
+
 		// Setear createdAt manualmente si JPA Auditing no está funcionando
 		if (newCategory.getCreatedAt() == null) {
 			newCategory.setCreatedAt(Instant.now());
@@ -185,12 +185,3 @@ public class CategoryServiceImpl implements CategoryService {
 	}
 
 }
-
-
-
-
-
-
-
-
-

@@ -1,5 +1,6 @@
 package com.selimhorri.app.service.impl;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -79,12 +80,23 @@ public class ProductServiceImpl implements ProductService {
 
 		// Validar que la categoría exista (usando Integer como ID)
 		Integer categoryId = productDto.getCategoryDto().getCategoryId();
-		categoryRepository.findById(categoryId)
+		Category category = categoryRepository.findById(categoryId)
 				.orElseThrow(() -> new CategoryNotFoundException("Categoría no encontrada con ID: " + categoryId));
 
 		productDto.setProductId(null);
-		return ProductMappingHelper.map(this.productRepository
-				.save(ProductMappingHelper.map(productDto)));
+		
+		// Mapear DTO a entidad
+		Product newProduct = ProductMappingHelper.map(productDto);
+		
+		// Asegurar que la categoría esté correctamente asignada
+		newProduct.setCategory(category);
+		
+		// Setear createdAt manualmente si JPA Auditing no está funcionando
+		if (newProduct.getCreatedAt() == null) {
+			newProduct.setCreatedAt(Instant.now());
+		}
+
+		return ProductMappingHelper.map(this.productRepository.save(newProduct));
 	}
 
 	@Override
