@@ -233,6 +233,8 @@ class ProductServiceImplTest {
 	void testUpdateById_Success() {
 		// Given
 		when(productRepository.findById(1)).thenReturn(Optional.of(testProduct));
+		// Mock categoryRepository.findById() para cargar la categoría completa
+		when(categoryRepository.findById(testCategory.getCategoryId())).thenReturn(Optional.of(testCategory));
 		
 		Product updatedProduct = Product.builder()
 				.productId(1)
@@ -253,6 +255,7 @@ class ProductServiceImplTest {
 		assertNotNull(result);
 		assertEquals(1, result.getProductId());
 		verify(productRepository, times(1)).findById(1);
+		verify(categoryRepository, times(1)).findById(testCategory.getCategoryId());
 		verify(productRepository, times(1)).save(any(Product.class));
 	}
 	
