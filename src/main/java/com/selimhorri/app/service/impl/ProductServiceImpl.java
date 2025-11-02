@@ -116,15 +116,44 @@ public class ProductServiceImpl implements ProductService {
 	public ProductDto update(final Integer productId, final ProductDto productDto) {
 		log.info("*** ProductDto, service; update product with productId *");
 
-		// Verificar que el producto exista
+		// Verificar que el producto exista y cargar la categoría completa
 		Product existingProduct = productRepository.findById(productId)
 				.orElseThrow(() -> new ProductNotFoundException("Producto no encontrado con ID: " + productId));
 
-		// Actualizar los campos del producto existente con los del DTO
-		Product updatedProduct = ProductMappingHelper.map(productDto);
-		updatedProduct.setProductId(existingProduct.getProductId()); // Asegurar que se mantiene el mismo ID
+		// Cargar la categoría completa desde el repositorio
+		Integer categoryId = productDto.getCategoryDto() != null ? productDto.getCategoryDto().getCategoryId() : null;
+		Category category = null;
+		if (categoryId != null) {
+			category = categoryRepository.findById(categoryId)
+					.orElseThrow(() -> new CategoryNotFoundException("Categoría no encontrada con ID: " + categoryId));
+		} else {
+			// Si no se proporciona categoría, mantener la existente
+			category = existingProduct.getCategory();
+		}
 
-		return ProductMappingHelper.map(this.productRepository.save(updatedProduct));
+		// Preservar createdAt del producto existente
+		Instant originalCreatedAt = existingProduct.getCreatedAt();
+		
+		// Actualizar los campos del producto existente con los del DTO
+		existingProduct.setProductTitle(productDto.getProductTitle());
+		existingProduct.setImageUrl(productDto.getImageUrl());
+		existingProduct.setSku(productDto.getSku());
+		existingProduct.setPriceUnit(productDto.getPriceUnit());
+		existingProduct.setQuantity(productDto.getQuantity());
+		existingProduct.setCategory(category);
+		
+		// Preservar createdAt (no debe cambiar en un update)
+		if (originalCreatedAt != null) {
+			existingProduct.setCreatedAt(originalCreatedAt);
+		} else {
+			// Si por alguna razón no tiene createdAt, setearlo ahora
+			existingProduct.setCreatedAt(Instant.now());
+		}
+		
+		// Setear updatedAt manualmente si JPA Auditing no está funcionando
+		existingProduct.setUpdatedAt(Instant.now());
+
+		return ProductMappingHelper.map(this.productRepository.save(existingProduct));
 	}
 
 	@Override
