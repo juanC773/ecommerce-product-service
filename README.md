@@ -81,4 +81,4 @@ Ver `POSTMAN_TESTS.md` para guía completa de pruebas o importar `ProductService
 ✅ **Migración Automática:** Al eliminar categoría, productos → "No category"  
 ✅ **Validaciones:** Campos requeridos en productos  
 ✅ **Queries Personalizados:** Exclusión de eliminados/reservados  
-.
+...
