@@ -226,6 +226,7 @@ jobs:
       with:
         repository: juanC773/ecommerce-api-gateway
         path: api-gateway
+        ref: ${{ github.ref_name }}  # Usa la misma rama que disparó el pipeline (stage, dev, etc.)
         
     - name: Install Newman
       run: |
