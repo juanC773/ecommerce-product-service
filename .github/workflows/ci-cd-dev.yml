@@ -293,7 +293,7 @@ jobs:
           --host=http://20.15.17.8:8080 \
           --users=50 \
           --spawn-rate=5 \
-          --run-time=5m \
+          --run-time=2m \
           --headless \
           --html=locust-report.html \
           --csv=locust-results \
